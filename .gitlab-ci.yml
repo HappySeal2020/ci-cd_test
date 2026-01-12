@@ -1,24 +1,40 @@
 stages: # Определяем этапы пайплайна
   - build
   - test
+  - deploy
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=/cache/.m2/repository" # Кэшируем локальные зависимости Maven
 
 build:
   stage: build
-  image: maven:3.8.5-openjdk-11 # Используем Docker-образ с Maven и JDK
+  image: maven:3.8.5-openjdk-17 # Используем Docker-образ с Maven и JDK
   script:
-    - mvn clean compile # Команда для компиляции проекта
+    #- mvn clean compile # Команда для компиляции проекта
+    - mvn clean package -DskipTests
   artifacts:
     paths:
-      - target/ # Передаём артефакты (напр., jar-файлы) на следующие этапы
-
+      - target/*.jar # Передаём артефакты (напр., jar-файлы) на следующие этапы
+  only:
+  - main # Запускаем стадию только на ветке main
 test:
   stage: test
-  image: maven:3.8.5-openjdk-11
+  image: maven:3.8.5-openjdk-17
   script:
     - mvn test # Запускаем тесты
+  only:
+    - merge_requests # Выполняем тесты для merge-запросов
   artifacts:
     reports:
       junit: target/surefire-reports/TEST-*.xml # Журналируем результаты тестирования
+
+deploy:
+  stage: deploy
+  image: docker:20.10.16 # Используем Docker для развертывания
+  services:
+    - docker:dind # Docker-in-Docker для работы с контейнерами
+  script:
+    - docker build -t my-spring-app:latest .
+    - docker run -d -p 8080:8080 my-spring-app:latest
+  only:
+    - main # Деплой выполняется только для ветки main
